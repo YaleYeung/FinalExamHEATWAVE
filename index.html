@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Countdown</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Archivo Black -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #0c0a12;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .archivo-black {
+            font-family: 'Archivo Black', sans-serif;
+            font-weight: 900;
+        }
+
+        /* Ambient background styled exactly like the screenshot */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            background-image: url('bg.jpeg');
+            background-size: cover;
+            background-position: center 65%;
+            filter: brightness(0.85) contrast(1.05);
+        }
+
+        /* Clean overlay representing natural twilight overlay gradient */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, rgba(162, 114, 153, 0.15) 0%, rgba(12, 10, 18, 0.4) 100%);
+            z-index: 2;
+        }
+
+        /* Core UI Container with Spring-like Transition */
+        .countdown-container {
+            z-index: 10;
+            cursor: pointer;
+            will-change: transform;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex items-center justify-center text-white relative">
+
+    <!-- Background Wallpaper Layer -->
+    <div class="ambient-bg">
+        <div class="overlay"></div>
+    </div>
+
+    <!-- Active Countdown Display -->
+    <div id="countdownBox" class="countdown-container flex flex-col items-center justify-center text-center px-4">
+        <!-- Top Row: Day indicator -->
+        <div class="flex items-baseline justify-center tracking-tight">
+            <span id="daysDisplay" class="archivo-black text-[70px] sm:text-[80px] leading-none">--</span>
+            <span class="archivo-black text-[40px] sm:text-[50px] leading-none ml-2.5">day(s) left</span>
+        </div>
+        
+        <!-- Bottom Row: Hours and Minutes tracker -->
+        <div id="hoursDisplay" class="archivo-black text-[75px] sm:text-[130px] md:text-[150px] leading-[1.05] tracking-tight mt-1">
+            loading...
+        </div>
+    </div>
+
+    <!-- Optional Battery Banner / Warn Notification Overlay (Top-Right) -->
+    <div class="absolute top-4 right-4 z-50 max-w-sm w-[90%] sm:w-auto">
+        <div id="lowPowerWarning" class="hidden bg-slate-900/95 border border-amber-500/20 text-white p-4 rounded-2xl shadow-2xl backdrop-blur-md flex items-start gap-4 transition-all duration-300">
+            <div class="p-2 bg-amber-500/10 rounded-xl text-amber-400 mt-0.5">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            </div>
+            <div class="flex-1">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-sm">Low Power Mode Active</h3>
+                    <button id="closeWarning" class="text-slate-400 hover:text-white transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+                    Disable low power mode to keep the screen fully awake during study.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Javascript Logical Block -->
+    <script>
+        // Exact SwiftUI logic transition
+        function calculateRemainingStudyTime(today, examStartDay) {
+            if (today >= examStartDay) {
+                return { hours: 0, minutes: 0, seconds: 0 };
+            }
+
+            const weekdayStartHour = 14;
+            const weekendStartHour = 8;
+            const endHour = 23;
+
+            const startDayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const examDayMidnight = new Date(examStartDay.getFullYear(), examStartDay.getMonth(), examStartDay.getDate());
+            
+            const MS_PER_DAY = 24 * 60 * 60 * 1000;
+            const totalDays = Math.round((examDayMidnight - startDayMidnight) / MS_PER_DAY);
+
+            let totalRemainingSeconds = 0;
+
+            for (let i = 0; i <= totalDays; i++) {
+                const loopDay = new Date(startDayMidnight.getTime());
+                loopDay.setDate(startDayMidnight.getDate() + i);
+
+                const weekday = loopDay.getDay(); // Sunday=0, Saturday=6
+                const isWeekend = (weekday === 0 || weekday === 6);
+                const studyStartHour = isWeekend ? weekendStartHour : weekdayStartHour;
+
+                const studyStart = new Date(loopDay.getFullYear(), loopDay.getMonth(), loopDay.getDate(), studyStartHour, 0, 0);
+                const studyEnd = new Date(loopDay.getFullYear(), loopDay.getMonth(), loopDay.getDate(), endHour, 0, 0);
+
+                const blockCutoff = new Date(Math.min(studyEnd.getTime(), examStartDay.getTime()));
+                const blockStart = new Date(Math.min(studyStart.getTime(), examStartDay.getTime()));
+
+                const isToday = loopDay.toDateString() === today.toDateString();
+
+                if (isToday) {
+                    if (today < blockStart) {
+                        totalRemainingSeconds += Math.max(0, (blockCutoff - blockStart) / 1000);
+                    } else if (today >= blockStart && today < blockCutoff) {
+                        totalRemainingSeconds += Math.max(0, (blockCutoff - today) / 1000);
+                    }
+                } else {
+                    if (blockCutoff > blockStart) {
+                        totalRemainingSeconds += Math.max(0, (blockCutoff - blockStart) / 1000);
+                    }
+                }
+            }
+
+            const totalSecsInt = Math.max(0, Math.floor(totalRemainingSeconds));
+            const hours = Math.floor(totalSecsInt / 3600);
+            const minutes = Math.floor((totalSecsInt % 3600) / 60);
+            const seconds = totalSecsInt % 60;
+
+            return { hours, minutes, seconds };
+        }
+
+        function updateTime() {
+            const now = new Date();
+            // Target Date: 2026-06-11 00:00 (Asia/Hong_Kong local timezone matching your device locale)
+            const examDate = new Date("2026-06-11T00:00:00+08:00"); 
+
+            const result = calculateRemainingStudyTime(now, examDate);
+
+            let hours = result.hours;
+            const daysLeft = Math.floor(hours / 24);
+            hours = hours % 24;
+
+            // Display formatted string output (Hours and Minutes matching screenshot)
+            const formattedMinutes = String(result.minutes).padStart(2, '0');
+            
+            document.getElementById('daysDisplay').textContent = Math.max(0, daysLeft);
+            document.getElementById('hoursDisplay').textContent = `${hours}h ${formattedMinutes}m`;
+        }
+
+        // Run UI Updates
+        updateTime();
+        setInterval(updateTime, 1000); // Live update tick
+
+        // Physical spring solver via requestAnimationFrame (Fast scale-up -> Bounce target transition)
+        const countdownBox = document.getElementById('countdownBox');
+        
+        let scale = 1.0;
+        let velocity = 0;
+        let targetScale = 1.0;
+        let isExpanding = false;
+
+        // Tuneable spring physics values matching Apple's default interactive springs
+        const stiffness = 320; 
+        const damping = 14;    
+        let lastTimestamp = null;
+        let animationFrameId = null;
+
+        function springStep(timestamp) {
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1); // Clamp dt to prevent layout jumps
+            lastTimestamp = timestamp;
+
+            // Simple Hooke's Law with damping forces
+            const displacement = scale - targetScale;
+            const springForce = -stiffness * displacement;
+            const dampingForce = -damping * velocity;
+            const acceleration = springForce + dampingForce;
+
+            velocity += acceleration * dt;
+            scale += velocity * dt;
+
+            // Smooth Target Switchover: Once we reach 95% of our scale-up phase,
+            // we smoothly redirect the spring target back down to 1.0.
+            // This creates a fast, continuous growth that gracefully bounces and rings around the base.
+            if (isExpanding && scale >= 1.13) {
+                targetScale = 1.0;
+                isExpanding = false;
+            }
+
+            countdownBox.style.transform = `scale(${scale})`;
+
+            // Stop condition
+            if (!isExpanding && Math.abs(scale - targetScale) < 0.001 && Math.abs(velocity) < 0.01) {
+                scale = targetScale;
+                countdownBox.style.transform = `scale(${scale})`;
+                animationFrameId = null;
+                lastTimestamp = null;
+            } else {
+                animationFrameId = requestAnimationFrame(springStep);
+            }
+        }
+
+        function triggerBounce(e) {
+            if (e) e.preventDefault();
+            
+            targetScale = 1.15; // Drive target outward at high velocity
+            isExpanding = true;
+
+            // Let current transition smoothly inherit rather than snapping to 1.0
+            if (Math.abs(scale - 1.0) < 0.05) {
+                scale = 1.0;
+                velocity = 0;
+            }
+
+            if (!animationFrameId) {
+                lastTimestamp = performance.now();
+                animationFrameId = requestAnimationFrame(springStep);
+            }
+        }
+
+        // Event listeners handling touch capabilities and clicks
+        countdownBox.addEventListener('click', triggerBounce);
+        countdownBox.addEventListener('touchstart', triggerBounce, { passive: false });
+
+        // Battery Status detection logic to reveal low power suggestion overlay
+        if ('getBattery' in navigator) {
+            navigator.getBattery().then(function(battery) {
+                function checkBattery() {
+                    const lowBattery = (battery.level <= 0.20 && !battery.charging);
+                    const warningBanner = document.getElementById('lowPowerWarning');
+                    if (lowBattery) {
+                        warningBanner.classList.remove('hidden');
+                    } else {
+                        warningBanner.classList.add('hidden');
+                    }
+                }
+                checkBattery();
+                battery.addEventListener('levelchange', checkBattery);
+                battery.addEventListener('chargingchange', checkBattery);
+            });
+        }
+
+        document.getElementById('closeWarning').addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('lowPowerWarning').classList.add('hidden');
+        });
+    </script>
+</body>
+</html>
